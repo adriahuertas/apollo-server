@@ -10,6 +10,7 @@ import "dotenv/config"
 
 import Book from "./models/book.js"
 import Author from "./models/author.js"
+import { UserInputError } from "apollo-server-errors"
 
 const MONGODB_URI = process.env.MONGODB_URI
 
@@ -66,10 +67,10 @@ const resolvers = {
     allAuthors: async () => Author.find({}),
     allBooks: async (root, args) => {
       if (!args.author && !args.genre) {
-        return Book.find({})
+        return Book.find({}).populate("author")
       }
       if (args.author && !args.genre) {
-        return Book.find({ author: args.author })
+        return Book.find({ author: args.author }).populate("author")
       }
       if (!args.author && args.genre) {
         return Book.find({ genres: { $in: [args.genre] } })
@@ -89,43 +90,39 @@ const resolvers = {
   },
   Mutation: {
     addBook: async (root, args) => {
-      const author = await Author.findOne({ name: args.author })
-      if (!author) {
-        // Create author
-        const author = new Author({ name: args.author, id: uuid() })
-        try {
-          await author.save()
-        } catch (error) {
-          throw new UserInputError(error.message, {
-            invalidArgs: args,
-          })
-        }
-      }
-      const book = new Book({ ...args, author: author.id })
       try {
-        await book.save()
+        let author = await Author.findOne({ name: args.author })
+
+        // If the author doesn't exist, create a new author
+        if (!author) {
+          author = new Author({ name: args.author })
+          await author.save()
+        }
+        console.log(author, args)
+        const book = new Book({ ...args, author: author.id })
+        const savedBook = await book.save()
+        return savedBook.populate("author")
       } catch (error) {
         throw new UserInputError(error.message, {
           invalidArgs: args,
         })
       }
-      return book
     },
     editAuthor: async (root, args) => {
-      const author = await Book.findOne({ name: args.name })
+      const author = await Author.findOne({ name: args.name })
       if (!author) {
         return null
       }
-      const updatedAuthor = { ...author, born: args.setBornTo }
+      author.born = args.setBornTo
 
       try {
-        await updatedAuthor.save()
+        await author.save()
       } catch (error) {
         throw new UserInputError(error.message, {
           invalidArgs: args,
         })
       }
-      return updatedAuthor
+      return author
     },
   },
 }
