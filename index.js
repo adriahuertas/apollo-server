@@ -58,6 +58,7 @@ type Author {
     authorCount: Int!
     allAuthors: [Author!]!
     allBooks(author: String, genre: String): [Book!]!
+    allFavoriteBooks: [Book!]!
     me: User
   }
 
@@ -106,7 +107,23 @@ const resolvers = {
         })
       }
     },
+    allFavoriteBooks: async (root, args, context) => {
+      const currentUser = context.currentUser
+      console.log(currentUser)
+      if (!currentUser) {
+        throw new GraphQLError("Not authenticated", {
+          extensions: {
+            code: "BAD_USER_INPUT",
+          },
+        })
+      }
+
+      return Book.find({
+        genres: { $in: [currentUser.favoriteGenre] },
+      }).populate("author")
+    },
     me: (root, args, context) => {
+      console.log("Running me query")
       return context.currentUser
     },
   },
@@ -136,7 +153,7 @@ const resolvers = {
           author = new Author({ name: args.author })
           await author.save()
         }
-        console.log(author, args)
+
         const book = new Book({ ...args, author: author.id })
         const savedBook = await book.save()
         return savedBook.populate("author")
@@ -174,7 +191,6 @@ const resolvers = {
     },
 
     createUser: async (root, args) => {
-      console.log(args)
       const user = new User({
         username: args.username,
         favoriteGenre: args.favoriteGenre,
