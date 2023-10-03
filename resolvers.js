@@ -80,6 +80,7 @@ const resolvers = {
 
         const book = new Book({ ...args, author: author.id })
         const savedBook = await (await book.save()).populate("author")
+        console.log(savedBook)
         pubsub.publish("BOOK_ADDED", { bookAdded: savedBook })
         return savedBook
       } catch (error) {
